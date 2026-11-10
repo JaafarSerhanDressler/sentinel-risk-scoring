@@ -1,0 +1,48 @@
+name: CI / Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install Blazor WASM workload
+        run: dotnet workload install wasm-tools
+
+      - name: Restore
+        run: dotnet restore RiskScoring.slnx
+
+      - name: Build
+        run: dotnet build RiskScoring.slnx -c Release --no-restore
+
+  deploy:
+    name: Trigger Coolify deploy
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Coolify deploy webhook
+        env:
+          HOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "COOLIFY_WEBHOOK secret not set — skipping deploy trigger."
+            exit 0
+          fi
+          echo "Triggering Coolify deployment..."
+          curl --fail --silent --show-error -X GET "$HOOK" \
+            -H "Authorization: Bearer $TOKEN"
+          echo "Deploy triggered."
