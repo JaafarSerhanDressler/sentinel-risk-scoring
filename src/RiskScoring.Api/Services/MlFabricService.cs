@@ -1,3 +1,4 @@
+using RiskScoring.Api.Persistence;
 using RiskScoring.Shared.Models;
 
 namespace RiskScoring.Api.Services;
@@ -10,7 +11,12 @@ namespace RiskScoring.Api.Services;
 public class MlFabricService
 {
     private readonly DataStore _store;
-    public MlFabricService(DataStore store) => _store = store;
+    private readonly PersistenceService _persist;
+    public MlFabricService(DataStore store, PersistenceService persist)
+    {
+        _store = store;
+        _persist = persist;
+    }
 
     public async Task<ScoreResponse?> ScoreAsync(ScoreRequest request)
     {
@@ -31,8 +37,11 @@ public class MlFabricService
             Status = AssessmentStatus.Running
         };
 
-        _store.AddLog(LogSeverity.Info, "ML.Fabric", request.RequestedBy, "AssessmentRequested",
-            $"Re-score queued for {p.FullName} using {sources.Count} source(s)", p.Id, correlation);
+        var newLogs = new List<LogEntry>
+        {
+            _store.AddLog(LogSeverity.Info, "ML.Fabric", request.RequestedBy, "AssessmentRequested",
+                $"Re-score queued for {p.FullName} using {sources.Count} source(s)", p.Id, correlation)
+        };
 
         await Task.Delay(Random.Shared.Next(650, 1100));
 
@@ -64,12 +73,14 @@ public class MlFabricService
 
         _store.AddAssessment(run);
         _store.RecomputeProgrammes();
-        _store.AddLog(LogSeverity.Audit, "ML.Fabric", request.RequestedBy, "ScoreGenerated",
-            $"Risk score {p.OverallScore:0} ({p.OverallBand}) for {p.FullName} · confidence {coverage:P0}", p.Id, correlation);
+        newLogs.Add(_store.AddLog(LogSeverity.Audit, "ML.Fabric", request.RequestedBy, "ScoreGenerated",
+            $"Risk score {p.OverallScore:0} ({p.OverallBand}) for {p.FullName} · confidence {coverage:P0}", p.Id, correlation));
 
         if (p.AlertClass == AlertClass.Emergency)
-            _store.AddLog(LogSeverity.Warning, "CareOps", "rules-engine", "EscalationTriggered",
-                $"Emergency alert for {p.FullName} — all escalation levels notified", p.Id, correlation);
+            newLogs.Add(_store.AddLog(LogSeverity.Warning, "CareOps", "rules-engine", "EscalationTriggered",
+                $"Emergency alert for {p.FullName} — all escalation levels notified", p.Id, correlation));
+
+        await _persist.PersistScoreAsync(p, run, newLogs, _store.Programmes);
 
         return new ScoreResponse { Run = run, Participant = p, RiskEvents = events, MedicationEvents = meds };
     }

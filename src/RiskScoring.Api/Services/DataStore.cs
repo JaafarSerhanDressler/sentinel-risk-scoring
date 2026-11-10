@@ -71,6 +71,23 @@ public class DataStore
         }
     }
 
+    /// <summary>Replaces the in-memory state with data loaded from PostgreSQL.</summary>
+    public void Hydrate(List<Participant> participants, List<Programme> programmes, List<DataSource> sources,
+        List<FabricRun> runs, List<AssessmentRun> assessments, List<LogEntry> logs, ModelMetrics metrics, long lastLogId)
+    {
+        lock (_gate)
+        {
+            Participants.Clear(); Participants.AddRange(participants);
+            Programmes.Clear(); Programmes.AddRange(programmes);
+            DataSources.Clear(); DataSources.AddRange(sources);
+            Runs.Clear(); Runs.AddRange(runs);
+            Assessments.Clear(); Assessments.AddRange(assessments);
+            Logs.Clear(); Logs.AddRange(logs);
+            Metrics = metrics;
+            _logId = lastLogId;
+        }
+    }
+
     private void Seed()
     {
         var credibleAsOf = DateTime.UtcNow.AddHours(-6);

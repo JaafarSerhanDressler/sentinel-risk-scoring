@@ -1,3 +1,5 @@
+using Microsoft.EntityFrameworkCore;
+using RiskScoring.Api.Persistence;
 using RiskScoring.Api.Services;
 using RiskScoring.Shared.Models;
 
@@ -7,7 +9,25 @@ builder.Services.AddOpenApi();
 builder.Services.AddSingleton<DataStore>();
 builder.Services.AddScoped<MlFabricService>();
 
+// Optional PostgreSQL persistence — enabled only when a connection string is set
+// (ConnectionStrings:Postgres). Otherwise the app runs on the in-memory store.
+var pgConn = builder.Configuration.GetConnectionString("Postgres")
+             ?? builder.Configuration["ConnectionStrings:Postgres"];
+if (!string.IsNullOrWhiteSpace(pgConn))
+{
+    builder.Services.AddDbContext<SentinelDbContext>(o => o.UseNpgsql(pgConn));
+}
+builder.Services.AddSingleton<PersistenceService>();
+
 var app = builder.Build();
+
+// Seed/load the database (no-op when Postgres isn't configured).
+using (var scope = app.Services.CreateScope())
+{
+    var store = scope.ServiceProvider.GetRequiredService<DataStore>();
+    var persistence = scope.ServiceProvider.GetRequiredService<PersistenceService>();
+    await persistence.InitializeAsync(store);
+}
 
 if (app.Environment.IsDevelopment())
 {
