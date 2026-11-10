@@ -19,6 +19,13 @@ RUN dotnet restore src/RiskScoring.Api/RiskScoring.Api.csproj
 COPY . .
 RUN dotnet publish src/RiskScoring.Api/RiskScoring.Api.csproj -c Release -o /app/publish /p:UseAppHost=false
 
+# The hosted API publish leaves the Blazor index.html placeholders unresolved
+# (empty import map + raw "#[.{fingerprint}]" boot-script token). Publishing the
+# client standalone resolves them, so overlay its wwwroot onto the API output.
+RUN dotnet publish src/RiskScoring.Client/RiskScoring.Client.csproj -c Release -o /app/client /p:UseAppHost=false \
+    && rm -rf /app/publish/wwwroot \
+    && cp -r /app/client/wwwroot /app/publish/wwwroot
+
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
