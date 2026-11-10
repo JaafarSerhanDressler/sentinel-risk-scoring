@@ -10,11 +10,22 @@ builder.Services.AddSingleton<DataStore>();
 builder.Services.AddScoped<MlFabricService>();
 
 // Optional PostgreSQL persistence — enabled only when a connection string is set
-// (ConnectionStrings:Postgres). Otherwise the app runs on the in-memory store.
+// (ConnectionStrings:Postgres, or a DATABASE_URL in postgres:// form from
+// Render/Railway/Heroku). Otherwise the app runs on the in-memory store.
 var pgConn = builder.Configuration.GetConnectionString("Postgres")
              ?? builder.Configuration["ConnectionStrings:Postgres"];
+if (string.IsNullOrWhiteSpace(pgConn))
+{
+    var dbUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+    if (!string.IsNullOrWhiteSpace(dbUrl) &&
+        (dbUrl.StartsWith("postgres://") || dbUrl.StartsWith("postgresql://")))
+    {
+        pgConn = ConvertDatabaseUrl(dbUrl);
+    }
+}
 if (!string.IsNullOrWhiteSpace(pgConn))
 {
+    builder.Configuration["ConnectionStrings:Postgres"] = pgConn; // so PersistenceService sees it
     builder.Services.AddDbContext<SentinelDbContext>(o => o.UseNpgsql(pgConn));
 }
 builder.Services.AddSingleton<PersistenceService>();
@@ -172,3 +183,22 @@ static string NameFromEmail(string email)
 static string InitialsFrom(string name) =>
     string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries)
         .Select(p => p[0])).ToUpperInvariant();
+
+static string ConvertDatabaseUrl(string url)
+{
+    // postgres://user:pass@host:port/db  ->  Npgsql keyword connection string
+    try
+    {
+        var uri = new Uri(url);
+        var parts = uri.UserInfo.Split(':', 2);
+        var user = Uri.UnescapeDataString(parts[0]);
+        var pass = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : "";
+        var db = uri.AbsolutePath.TrimStart('/');
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        return $"Host={uri.Host};Port={port};Database={db};Username={user};Password={pass};SSL Mode=Require;Trust Server Certificate=true";
+    }
+    catch
+    {
+        return url;
+    }
+}

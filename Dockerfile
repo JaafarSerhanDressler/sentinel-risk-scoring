@@ -25,7 +25,7 @@ RUN dotnet publish src/RiskScoring.Api/RiskScoring.Api.csproj -c Release -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
-ENV ASPNETCORE_URLS=http://+:8080
 ENV ASPNETCORE_ENVIRONMENT=Production
 EXPOSE 8080
-ENTRYPOINT ["dotnet", "RiskScoring.Api.dll"]
+# Bind to the platform-provided $PORT (Render/Railway/etc.), default 8080 (Coolify/local).
+ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_URLS=http://+:${PORT:-8080} dotnet RiskScoring.Api.dll"]
