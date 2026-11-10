@@ -8,9 +8,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Blazor WebAssembly publish needs the wasm-tools workload (runtime relinking).
-RUN dotnet workload install wasm-tools
-
 # Restore (copy csproj files first for layer caching)
 COPY RiskScoring.slnx ./
 COPY src/RiskScoring.Shared/RiskScoring.Shared.csproj src/RiskScoring.Shared/
