@@ -1,0 +1,157 @@
+@page "/admin"
+@inject ApiClient Api
+
+<PageTitle>Fabric Console · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <div class="row spread vcenter wrap" style="margin-bottom:20px; gap:12px;">
+        <div>
+            <div class="section-title">Platform administration</div>
+            <h1 style="font-size:24px;">ML Fabric Console</h1>
+        </div>
+        <div class="row vcenter wrap" style="gap:10px;">
+            @if (_metrics is not null)
+            {
+                <span class="pill-stat"><Icon Name="cpu" /> @_metrics.ModelVersion</span>
+                <span class="pill-stat"><Icon Name="clock" /> risk as of @_metrics.CredibleAsOf.ToString("MMM d HH:mm")</span>
+                <span class="risk-badge risk-low"><span class="d"></span>Healthy</span>
+            }
+            <button class="btn btn-ghost"><Icon Name="download" /> Export to Power BI</button>
+        </div>
+    </div>
+
+    <div class="grid g-4 stagger" style="margin-bottom:18px;">
+        @if (_metrics is null)
+        {
+            @for (int i = 0; i < 4; i++) { <div class="card"><div class="sk" style="height:84px;"></div></div> }
+        }
+        else
+        {
+            <KpiCard Label="Model AUC" Value="_metrics.Auc" Decimals="3" IconName="target" Tint="#22d3ee" />
+            <KpiCard Label="Accuracy" Value="@(_metrics.Accuracy * 100)" Decimals="1" Suffix="%" IconName="check" Tint="#10b981" />
+            <KpiCard Label="Participants scored today" Value="_metrics.PredictionsToday" IconName="zap" Tint="#6366f1" />
+            <KpiCard Label="Avg latency" Value="_metrics.AvgLatencyMs" Suffix=" ms" IconName="clock" Tint="#f59e0b" />
+        }
+    </div>
+
+    <div class="grid g-2" style="margin-bottom:18px;">
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Model performance</div><div class="card-sub">Validation holdout metrics</div></div>
+                <Icon Name="activity" />
+            </div>
+            @if (_metrics is not null)
+            {
+                <MetricBar Label="Precision" Value="_metrics.Precision" Color="#22d3ee" />
+                <MetricBar Label="Recall" Value="_metrics.Recall" Color="#6366f1" />
+                <MetricBar Label="Accuracy" Value="_metrics.Accuracy" Color="#10b981" />
+                <MetricBar Label="Population drift (PSI)" Value="_metrics.Drift" Color="@(_metrics.Drift > 0.2 ? "#ef4444" : "#f59e0b")" />
+                <div class="divider" style="margin:14px 0;"></div>
+                <div class="row spread" style="font-size:12.5px;"><span class="muted">Algorithm</span><span style="font-weight:600; text-align:right;">@_metrics.Algorithm</span></div>
+                <div class="row spread" style="font-size:12.5px; margin-top:8px;"><span class="muted">ChartMeds as of</span><span style="font-weight:600;">@_metrics.ChartMedsAsOf.ToString("MMM d, HH:mm")</span></div>
+                <div class="row spread" style="font-size:12.5px; margin-top:8px;"><span class="muted">Uptime (30d)</span><span style="font-weight:600; color:var(--ok);">@_metrics.Uptime.ToString("P2")</span></div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Daily Fabric runs</div><div class="card-sub">Only completed runs are read</div></div>
+                <Icon Name="refresh" />
+            </div>
+            @if (_runs is null)
+            {
+                <div class="col">@for (int i = 0; i < 6; i++) { <div class="sk" style="height:40px;"></div> }</div>
+            }
+            else
+            {
+                @foreach (var r in _runs)
+                {
+                    <div class="log-row">
+                        <span class="log-dot" style="background:@Ui.RunStatusColor(r.Status);"></span>
+                        <div class="log-main">
+                            <div class="row spread vcenter wrap" style="gap:8px;">
+                                <div class="log-msg mono" style="font-weight:600;">@r.RunId</div>
+                                <span class="risk-badge" style="color:@Ui.RunStatusColor(r.Status); background:@(Ui.RunStatusColor(r.Status))22;">@r.Status</span>
+                            </div>
+                            <div class="log-meta">@r.ParticipantRows participants · @r.EventRows events · @r.MedicationEventRows meds@(r.FinishedAt is null ? " · did not finish" : $" · finished {r.FinishedAt:HH:mm}")</div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px;">
+        <div class="card-head">
+            <div><div class="card-title">Data source health</div><div class="card-sub">Credible · ChartMeds · Fabric · Dayforce · Entra</div></div>
+            @if (_sources is not null)
+            {
+                <span class="pill-stat"><span class="status-dot st-connected"></span> @_sources.Count(s => s.Status == DataSourceStatus.Connected)/@_sources.Count online</span>
+            }
+        </div>
+        @if (_sources is null)
+        {
+            <div class="col">@for (int i = 0; i < 4; i++) { <div class="sk" style="height:64px;"></div> }</div>
+        }
+        else
+        {
+            <div class="grid g-2">
+                @foreach (var ds in _sources)
+                {
+                    <DataSourceTile Source="ds" />
+                }
+            </div>
+        }
+    </div>
+
+    <div class="card">
+        <div class="card-head">
+            <div><div class="card-title">Recent re-scores</div><div class="card-sub">App-requested assessments</div></div>
+            <Icon Name="list" />
+        </div>
+        @if (_assessments is null)
+        {
+            <div class="col">@for (int i = 0; i < 4; i++) { <div class="sk" style="height:40px;"></div> }</div>
+        }
+        else if (_assessments.Count == 0)
+        {
+            <div class="muted" style="font-size:13px;">No re-scores yet — start one from the assessment screen.</div>
+        }
+        else
+        {
+            @foreach (var r in _assessments)
+            {
+                <div class="log-row vcenter">
+                    <div class="avatar sm" style="width:30px;height:30px;font-size:11px;">@Initials(r.ParticipantName)</div>
+                    <div class="log-main">
+                        <div class="log-msg" style="font-weight:600;">@r.ParticipantName</div>
+                        <div class="log-meta">@r.RequestedBy · @Ui.TimeAgo(r.StartedAt) · @r.DurationMs ms</div>
+                    </div>
+                    @if (r.AlertClass == AlertClass.Emergency) { <AlertBadge Class="r.AlertClass" /> }
+                    <RiskBadge Band="r.OverallBand" />
+                    <span style="font-weight:800; font-size:16px; width:34px; text-align:right; color:@Ui.BandColor(r.OverallBand);">@r.OverallScore.ToString("0")</span>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private ModelMetrics? _metrics;
+    private List<DataSource>? _sources;
+    private List<FabricRun>? _runs;
+    private List<AssessmentRun>? _assessments;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var m = Api.GetMetricsAsync();
+        var s = Api.GetDataSourcesAsync();
+        var r = Api.GetRunsAsync(8);
+        var a = Api.GetAssessmentsAsync(8);
+        await Task.WhenAll(m, s, r, a);
+        _metrics = m.Result; _sources = s.Result; _runs = r.Result; _assessments = a.Result;
+    }
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(p => p[0])).ToUpperInvariant();
+}

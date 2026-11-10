@@ -1,0 +1,27 @@
+@* A single risk-type row with probability bar. *@
+<div class="factor">
+    <div class="factor-top">
+        <div class="factor-name">
+            <Icon Name="@Ui.RiskTypeIcon(Score.Type)" /> @Ui.RiskTypeLabel(Score.Type)
+            <span class="factor-cat">sev @Score.Severity.ToString("0.#")/5</span>
+        </div>
+        <div class="factor-val" style="color:@Ui.BandColor(Score.Band);">@((Score.Probability * 100).ToString("0"))% · @Ui.BandLabel(Score.Band)</div>
+    </div>
+    <div class="factor-track">
+        <div class="factor-fill" style="width:@(_width.ToString("0.#"))%; background:@Ui.BandColor(Score.Band);"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public RiskTypeScore Score { get; set; } = new();
+
+    private double _width;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Task.Delay(120);
+        _width = Math.Clamp(Score.Probability * 100, 3, 100);
+        await InvokeAsync(StateHasChanged);
+    }
+}

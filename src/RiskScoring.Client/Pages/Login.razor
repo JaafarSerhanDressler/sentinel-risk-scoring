@@ -1,0 +1,139 @@
+@page "/login"
+@layout BlankLayout
+@inject ApiClient Api
+@inject AppState App
+@inject NavigationManager Nav
+
+<div style="min-height:100vh; display:grid; grid-template-columns:1.05fr 1fr; overflow:hidden;" class="auth-grid">
+
+    <div class="auth-hero" style="position:relative; padding:56px 60px; display:flex; flex-direction:column; justify-content:space-between;
+                background:radial-gradient(900px 500px at 20% 0%, rgba(99,102,241,0.28), transparent 60%),
+                           radial-gradient(700px 500px at 90% 90%, rgba(34,211,238,0.22), transparent 55%);
+                border-right:1px solid var(--stroke);">
+        <div class="brand" style="padding:0;">
+            <div class="brand-mark"><Icon Name="shield" /></div>
+            <div>
+                <div class="brand-name">Sentinel</div>
+                <div class="brand-sub">Participant Risk Response</div>
+            </div>
+        </div>
+
+        <div class="auth-hero-body page-enter">
+            <div class="chip on" style="margin-bottom:20px;"><Icon Name="sparkle" /> Powered by the ML Fabric</div>
+            <h1 style="font-size:40px; line-height:1.08; letter-spacing:-0.03em; max-width:480px;">
+                Respond to risk <span style="background:var(--brand-grad); -webkit-background-clip:text; background-clip:text; color:transparent;">before it escalates.</span>
+            </h1>
+            <p class="muted" style="font-size:15px; margin-top:16px; max-width:430px; line-height:1.6;">
+                Sentinel reads the daily Fabric risk feed across BH&nbsp;RES, ICMS, SH and SH&nbsp;SUBONLY, raises alerts on dangerous behaviour, medication refusal and non-compliance, and routes the right responder in real time.
+            </p>
+
+            <div class="col" style="gap:14px; margin-top:34px; max-width:430px;">
+                <div class="row vcenter" style="gap:12px;">
+                    <div class="ds-ico"><Icon Name="alert" /></div>
+                    <div><div style="font-weight:700; font-size:14px;">Emergency &amp; warning alerts</div><div class="muted" style="font-size:12.5px;">One open alert per participant per risk type, with escalation.</div></div>
+                </div>
+                <div class="row vcenter" style="gap:12px;">
+                    <div class="ds-ico"><Icon Name="cpu" /></div>
+                    <div><div style="font-weight:700; font-size:14px;">Explainable scores</div><div class="muted" style="font-size:12.5px;">Behaviour &amp; medication events behind every score.</div></div>
+                </div>
+                <div class="row vcenter" style="gap:12px;">
+                    <div class="ds-ico"><Icon Name="download" /></div>
+                    <div><div style="font-weight:700; font-size:14px;">Installable PWA</div><div class="muted" style="font-size:12.5px;">Works on a shared phone, offline-first.</div></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="muted" style="font-size:12px;">Synthetic data only · No participant PII · Dressler discovery build</div>
+    </div>
+
+    <div style="display:grid; place-items:center; padding:40px 28px;">
+        <div class="card pad-lg page-enter" style="width:min(400px,100%);">
+            <h2 style="font-size:23px;">Sign in</h2>
+            <p class="muted" style="font-size:13.5px; margin-top:6px; margin-bottom:24px;">Use your organisation account.</p>
+
+            <div class="field">
+                <label>Work email</label>
+                <div class="input">
+                    <Icon Name="user" />
+                    <input type="email" @bind="_email" @bind:event="oninput" placeholder="alex.monroe@easterseals.org" />
+                </div>
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <div class="input">
+                    <Icon Name="shield" />
+                    <input type="password" @bind="_password" @bind:event="oninput" @onkeydown="OnKey" placeholder="••••••••" />
+                </div>
+            </div>
+
+            @if (_error is not null)
+            {
+                <div class="risk-badge risk-critical" style="margin-bottom:14px;"><span class="d"></span>@_error</div>
+            }
+
+            <button class="btn btn-primary btn-block btn-lg" @onclick="SignInAsync" disabled="@_busy">
+                @if (_busy)
+                {
+                    <span>Signing in…</span>
+                }
+                else
+                {
+                    <Icon Name="chevron-right" />
+                    <span>Sign in with Entra</span>
+                }
+            </button>
+
+            <div class="row vcenter" style="margin:18px 0; gap:12px;">
+                <div class="divider" style="flex:1;"></div><span class="faint" style="font-size:11.5px;">OR</span><div class="divider" style="flex:1;"></div>
+            </div>
+
+            <button class="btn btn-ghost btn-block" @onclick="DemoAsync" disabled="@_busy"><Icon Name="zap" /> Continue with demo account</button>
+
+            <p class="faint" style="font-size:11.5px; margin-top:18px; text-align:center;">
+                Role by email: <b>admin@@</b>, <b>sup@@</b> (supervisor), <b>clin@@</b> (clinical) — otherwise frontline.
+            </p>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _email = "alex.monroe@easterseals.org";
+    private string _password = "demo";
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await App.EnsureLoadedAsync();
+        if (App.IsAuthenticated) Nav.NavigateTo("", replace: true);
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await SignInAsync();
+    }
+
+    private async Task SignInAsync()
+    {
+        if (_busy) return;
+        _error = null;
+        if (string.IsNullOrWhiteSpace(_email)) { _error = "Enter your work email"; return; }
+        _busy = true;
+        try
+        {
+            var user = await Api.LoginAsync(new LoginRequest { Email = _email, Password = _password });
+            if (user is null) { _error = "Sign-in failed. Try again."; return; }
+            await App.SignInAsync(user);
+            Nav.NavigateTo("", replace: true);
+        }
+        catch { _error = "Unable to reach the server."; }
+        finally { _busy = false; }
+    }
+
+    private async Task DemoAsync()
+    {
+        _email = "alex.monroe@easterseals.org";
+        _password = "demo";
+        await SignInAsync();
+    }
+}

@@ -1,0 +1,85 @@
+@page "/participants"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Participants · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <div class="row spread vcenter" style="margin-bottom:18px;">
+        <div>
+            <h1 style="font-size:24px;">Participants</h1>
+            <div class="muted" style="font-size:13px; margin-top:4px;">@(_all?.Count ?? 0) with open alerts · stratified by risk</div>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("assess")'><Icon Name="plus" /> New assessment</button>
+    </div>
+
+    <div class="input" style="margin-bottom:14px; max-width:520px;">
+        <Icon Name="search" />
+        <input placeholder="Search by name, client ID or programme…" @bind="_q" @bind:event="oninput" />
+    </div>
+
+    <div class="row wrap" style="gap:9px; margin-bottom:18px;">
+        <button class="chip @(_mode == "all" ? "on" : "")" @onclick='() => _mode = "all"'><Icon Name="users" /> All</button>
+        <button class="chip @(_mode == "emergency" ? "on" : "")" @onclick='() => _mode = "emergency"'><span class="status-dot" style="background:#ef4444;"></span> Emergency</button>
+        @foreach (var b in new[] { RiskBand.High, RiskBand.Moderate, RiskBand.Low })
+        {
+            <button class="chip @(_mode == b.ToString() ? "on" : "")" @onclick="() => _mode = b.ToString()">
+                <span class="status-dot" style="background:@Ui.BandColor(b);"></span> @Ui.BandLabel(b)
+            </button>
+        }
+    </div>
+
+    @if (_all is null)
+    {
+        <div class="col">@for (int i = 0; i < 8; i++) { <div class="sk" style="height:66px;"></div> }</div>
+    }
+    else
+    {
+        var list = Filtered().ToList();
+        <div class="muted" style="font-size:12.5px; margin-bottom:10px;">@list.Count result@(list.Count == 1 ? "" : "s")</div>
+        <div class="plist stagger">
+            @foreach (var p in list)
+            {
+                <div class="prow" @onclick='() => Nav.NavigateTo($"participants/{p.Id}")'>
+                    <div class="avatar">@p.Initials</div>
+                    <div class="meta">
+                        <div class="nm">@p.FullName <span class="faint" style="font-weight:500;">· #@p.ClientId</span></div>
+                        <div class="sub">@p.ProgrammeCode · @(p.CaseManager ?? "Unassigned") · @Ui.AlertStateLabel(p.AlertState)</div>
+                    </div>
+                    @if (p.AlertClass == AlertClass.Emergency) { <AlertBadge Class="p.AlertClass" /> }
+                    <RiskBadge Band="p.OverallBand" />
+                    <div class="score-chip">
+                        <div class="score-num" style="color:@Ui.BandColor(p.OverallBand);">@p.OverallScore.ToString("0")</div>
+                        <div class="faint" style="font-size:10.5px;">@Ui.TimeAgo(p.LastAssessment)</div>
+                    </div>
+                    <Icon Name="chevron-right" />
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Participant>? _all;
+    private string _q = "";
+    private string _mode = "all";
+
+    protected override async Task OnInitializedAsync() => _all = await Api.GetParticipantsAsync();
+
+    private IEnumerable<Participant> Filtered()
+    {
+        if (_all is null) return Enumerable.Empty<Participant>();
+        IEnumerable<Participant> q = _all;
+        if (_mode == "emergency") q = q.Where(p => p.AlertClass == AlertClass.Emergency);
+        else if (Enum.TryParse<RiskBand>(_mode, out var band)) q = q.Where(p => p.OverallBand == band);
+
+        if (!string.IsNullOrWhiteSpace(_q))
+        {
+            var t = _q.Trim().ToLowerInvariant();
+            q = q.Where(p => p.FullName.ToLowerInvariant().Contains(t)
+                          || p.ClientId.ToString().Contains(t)
+                          || p.ProgrammeCode.ToLowerInvariant().Contains(t));
+        }
+        return q.OrderByDescending(p => p.OverallScore);
+    }
+}

@@ -1,0 +1,134 @@
+﻿@inherits LayoutComponentBase
+@implements IDisposable
+@inject AppState App
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="app-shell">
+    <aside class="sidebar">
+        <div class="brand">
+            <div class="brand-mark"><Icon Name="shield" /></div>
+            <div>
+                <div class="brand-name">Sentinel</div>
+                <div class="brand-sub">Risk Response</div>
+            </div>
+        </div>
+
+        <div class="nav-section">Main</div>
+        <NavLink class="nav-item" href="" Match="NavLinkMatch.All"><Icon Name="dashboard" /> Dashboard</NavLink>
+        <NavLink class="nav-item" href="participants"><Icon Name="users" /> Participants</NavLink>
+        <NavLink class="nav-item" href="programmes"><Icon Name="layers" /> Programmes</NavLink>
+        <NavLink class="nav-item" href="assess"><Icon Name="activity" /> Run Assessment</NavLink>
+
+        <div class="nav-section">Operations</div>
+        <NavLink class="nav-item" href="admin"><Icon Name="shield" /> Fabric Console</NavLink>
+        <NavLink class="nav-item" href="logs"><Icon Name="list" /> Audit Logs</NavLink>
+
+        <div class="nav-section">Account</div>
+        <NavLink class="nav-item" href="settings"><Icon Name="settings" /> Settings</NavLink>
+
+        <div class="sidebar-foot col" style="gap:12px;">
+            @if (App.CanInstall)
+            {
+                <button class="btn btn-primary btn-block" @onclick="InstallAsync">
+                    <Icon Name="download" /> Install App
+                </button>
+            }
+            <div class="user-chip">
+                <div class="avatar sm">@(App.User?.Initials ?? "–")</div>
+                <div style="flex:1; min-width:0;">
+                    <div class="nm">@(App.User?.Name ?? "Guest")</div>
+                    <div class="rl">@(App.User?.Role ?? "")</div>
+                </div>
+                <button class="icon-btn" style="width:34px;height:34px;" title="Sign out" @onclick="SignOutAsync"><Icon Name="logout" /></button>
+            </div>
+        </div>
+    </aside>
+
+    <div class="main">
+        <div class="mobile-topbar">
+            <div class="brand-mark" style="width:34px;height:34px;"><Icon Name="shield" /></div>
+            <div style="flex:1;">
+                <div class="brand-name" style="font-size:15px;">Sentinel</div>
+            </div>
+            @if (App.CanInstall)
+            {
+                <button class="icon-btn" title="Install app" @onclick="InstallAsync"><Icon Name="download" /></button>
+            }
+            <button class="icon-btn"><Icon Name="bell" /><span class="dot"></span></button>
+        </div>
+
+        <div class="topbar">
+            <div class="search-box">
+                <Icon Name="search" />
+                <input placeholder="Search participants, client ID, programme…" />
+            </div>
+            <div class="topbar-spacer"></div>
+            @if (App.CanInstall)
+            {
+                <button class="chip on" @onclick="InstallAsync"><Icon Name="download" /> Install</button>
+            }
+            <button class="icon-btn"><Icon Name="bell" /><span class="dot"></span></button>
+            <div class="avatar sm">@(App.User?.Initials ?? "–")</div>
+        </div>
+
+        <main class="content">
+            @Body
+        </main>
+
+        <nav class="bottom-nav">
+            <NavLink class="bn-item" href="" Match="NavLinkMatch.All"><Icon Name="dashboard" /> Home</NavLink>
+            <NavLink class="bn-item" href="participants"><Icon Name="users" /> People</NavLink>
+            <NavLink class="bn-fab" href="assess"><Icon Name="plus" /></NavLink>
+            <NavLink class="bn-item" href="programmes"><Icon Name="layers" /> Programmes</NavLink>
+            <NavLink class="bn-item" href="settings"><Icon Name="settings" /> Settings</NavLink>
+        </nav>
+    </div>
+</div>
+
+@code {
+    private DotNetObjectReference<MainLayout>? _ref;
+
+    protected override async Task OnInitializedAsync()
+    {
+        App.Changed += OnChanged;
+        await App.EnsureLoadedAsync();
+        if (!App.IsAuthenticated)
+            Nav.NavigateTo("login", replace: true);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _ref = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("sentinel.init", _ref);
+            var can = await JS.InvokeAsync<bool>("sentinel.canInstall");
+            if (can) App.SetCanInstall(true);
+        }
+        catch { }
+    }
+
+    [JSInvokable] public void OnInstallAvailable() => App.SetCanInstall(true);
+    [JSInvokable] public void OnInstalled() => App.SetCanInstall(false);
+
+    private async Task InstallAsync()
+    {
+        try { await JS.InvokeAsync<string>("sentinel.promptInstall"); } catch { }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await App.SignOutAsync();
+        Nav.NavigateTo("login", replace: true);
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        App.Changed -= OnChanged;
+        _ref?.Dispose();
+    }
+}

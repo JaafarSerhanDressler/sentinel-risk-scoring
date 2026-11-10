@@ -1,0 +1,17 @@
+<div class="ds-tile">
+    <div class="ds-ico"><Icon Name="@Ui.SourceIcon(Source.Type)" /></div>
+    <div style="flex:1; min-width:0;">
+        <div class="nm">@Source.Name</div>
+        <div class="sub">@Source.Description</div>
+    </div>
+    <div style="text-align:right; display:flex; flex-direction:column; gap:5px; align-items:flex-end;">
+        <span class="pill-stat" style="padding:4px 10px;">
+            <span class="status-dot @Ui.StatusClass(Source.Status)"></span>@Source.Status
+        </span>
+        <span class="faint" style="font-size:11px;">@Ui.TimeAgo(Source.LastSync) · @Source.LatencyMs ms</span>
+    </div>
+</div>
+
+@code {
+    [Parameter] public DataSource Source { get; set; } = new();
+}

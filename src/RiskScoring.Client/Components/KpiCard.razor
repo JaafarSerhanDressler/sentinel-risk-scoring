@@ -1,0 +1,31 @@
+<div class="card kpi">
+    <div class="kpi-top">
+        <div class="kpi-icon" style="background:@(Tint)22; color:@Tint;">
+            <Icon Name="@IconName" />
+        </div>
+        @if (Trend.HasValue)
+        {
+            var bad = TrendInverse ? Trend.Value > 0 : Trend.Value < 0;
+            <span class="trend @(bad ? "up" : "down")">
+                <Icon Name="@(Trend.Value >= 0 ? "arrow-up" : "arrow-down")" />
+                @Math.Abs(Trend.Value).ToString("0.#")%
+            </span>
+        }
+    </div>
+    <div class="kpi-value" style="@(ValueColor is null ? "" : $"color:{ValueColor}")">
+        <CountUp Value="Value" Decimals="Decimals" Suffix="@Suffix" />
+    </div>
+    <div class="kpi-label">@Label</div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public double Value { get; set; }
+    [Parameter] public int Decimals { get; set; }
+    [Parameter] public string Suffix { get; set; } = "";
+    [Parameter] public string IconName { get; set; } = "activity";
+    [Parameter] public string Tint { get; set; } = "#6366f1";
+    [Parameter] public string? ValueColor { get; set; }
+    [Parameter] public double? Trend { get; set; }
+    [Parameter] public bool TrendInverse { get; set; } = true;
+}

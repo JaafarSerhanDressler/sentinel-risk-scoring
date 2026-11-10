@@ -1,0 +1,176 @@
+@page "/participants/{Id}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Participant · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <a class="back-btn" href="participants" style="margin-bottom:16px; display:inline-flex;"><Icon Name="chevron-left" /> Back to participants</a>
+
+    @if (_notFound)
+    {
+        <div class="card"><div class="muted">Participant not found.</div></div>
+    }
+    else if (_d is null)
+    {
+        <div class="sk" style="height:120px; margin-bottom:18px;"></div>
+        <div class="grid g-2"><div class="sk" style="height:260px;"></div><div class="sk" style="height:260px;"></div></div>
+    }
+    else
+    {
+        var p = _d.Participant;
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="row spread wrap vcenter" style="gap:16px;">
+                <div class="row vcenter" style="gap:16px;">
+                    <div class="avatar lg">@p.Initials</div>
+                    <div>
+                        <h1 style="font-size:23px;">@p.FullName</h1>
+                        <div class="muted" style="font-size:13px; margin-top:4px;">
+                            Client #@p.ClientId · @p.PredictionId
+                        </div>
+                        <div class="row wrap" style="gap:8px; margin-top:10px;">
+                            <span class="pill-stat" style="cursor:pointer;" @onclick='() => Nav.NavigateTo($"programmes/{p.ProgrammeCode}")'><Icon Name="layers" /> @p.ProgrammeCode</span>
+                            <span class="pill-stat"><Icon Name="user" /> @(p.CaseManager ?? "Unassigned")</span>
+                            <span class="pill-stat"><Icon Name="database" /> @(p.Site ?? "No site")</span>
+                            <AlertBadge Class="p.AlertClass" />
+                            <span class="risk-badge" style="color:@Ui.AlertStateColor(p.AlertState); background:@(Ui.AlertStateColor(p.AlertState))22;">@Ui.AlertStateLabel(p.AlertState)</span>
+                            @if (p.Hospitalised) { <span class="pill-stat" style="color:var(--warn);"><Icon Name="heart" /> Hospitalised · on hold</span> }
+                            @if (p.DataReliability == DataReliability.NotEnoughInformation) { <span class="pill-stat" style="color:var(--warn);"><Icon Name="info" /> @p.AssessmentStatusDetail</span> }
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-primary" @onclick='() => Nav.NavigateTo($"assess/{p.Id}")'><Icon Name="activity" /> Re-run assessment</button>
+            </div>
+        </div>
+
+        <div class="grid g-2" style="margin-bottom:18px;">
+            <div class="card center-col" style="justify-content:center; gap:14px;">
+                <RiskGauge Value="p.OverallScore" Band="p.OverallBand" Size="210" />
+                <RiskBadge Band="p.OverallBand" />
+                <div class="row" style="gap:10px;">
+                    <span class="pill-stat"><Icon Name="alert" /> danger sev @p.DangerSeverity.ToString("0.#")/5</span>
+                    <span class="pill-stat">
+                        <Icon Name="@(p.Delta >= 0 ? "trend-up" : "trend-down")" />
+                        <span style="color:@(p.Delta >= 0 ? "var(--err)" : "var(--ok)");">@(p.Delta >= 0 ? "+" : "")@p.Delta.ToString("0")</span> vs last
+                    </span>
+                </div>
+                @if (p.CurrentRefusalStreak > 0) { <div class="faint" style="font-size:11.5px;">Refusal streak: @p.CurrentRefusalStreak days</div> }
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div><div class="card-title">Risk types</div><div class="card-sub">Probability × severity</div></div><Icon Name="cpu" /></div>
+                @foreach (var rt in p.RiskScores)
+                {
+                    <RiskTypeBar Score="rt" />
+                }
+                <div class="card-head" style="margin:14px 0 8px;"><div class="card-title" style="font-size:13px;">Risk trajectory</div></div>
+                @if (_d.Trend.Count > 0) { <LineChart Data="_d.Trend" Color="@Ui.BandColor(p.OverallBand)" H="120" /> }
+            </div>
+        </div>
+
+        <div class="grid g-2" style="margin-bottom:18px;">
+            <div class="card">
+                <div class="card-head"><div><div class="card-title">Behaviour events</div><div class="card-sub">Last 90 days</div></div><Icon Name="alert" /></div>
+                @if (_d.RiskEvents.Count == 0) { <div class="muted" style="font-size:13px;">No behaviour events in window.</div> }
+                else
+                {
+                    @foreach (var e in _d.RiskEvents)
+                    {
+                        <div class="log-row">
+                            <span class="log-dot" style="background:@Ui.AlertClassColor(e.EventClass);"></span>
+                            <div class="log-main">
+                                <div class="row spread vcenter wrap" style="gap:8px;">
+                                    <div class="log-msg" style="font-weight:600;">@e.Category@(e.Subtype is null ? "" : $" · {e.Subtype}")</div>
+                                    <span class="tag">sev @e.Severity · @e.ClientRole</span>
+                                </div>
+                                <div class="log-meta">@e.Date.ToString("MMM d") · @Ui.AlertClassLabel(e.EventClass) · source: @e.Source</div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div><div class="card-title">Medication events</div><div class="card-sub">Missed doses, last 90 days</div></div><Icon Name="pill" /></div>
+                @if (_d.MedicationEvents.Count == 0) { <div class="muted" style="font-size:13px;">No medication events in window.</div> }
+                else
+                {
+                    @foreach (var m in _d.MedicationEvents)
+                    {
+                        <div class="log-row">
+                            <span class="log-dot" style="background:@Ui.AlertClassColor(m.EventClass);"></span>
+                            <div class="log-main">
+                                <div class="row spread vcenter wrap" style="gap:8px;">
+                                    <div class="log-msg" style="font-weight:600;">@m.MedicationName <span class="faint" style="font-weight:400;">· @m.MedicationClass</span></div>
+                                    <span class="tag">@m.MissReason@(m.IsPrn ? " · PRN" : "")</span>
+                                </div>
+                                <div class="log-meta">@m.Date.ToString("MMM d") · sev @m.Severity@(m.RestartFlag is null ? "" : $" · restart: {m.RestartFlag}")</div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-head"><div><div class="card-title">Recommended response</div><div class="card-sub">Action guidance</div></div><Icon Name="clipboard" /></div>
+            <div class="col" style="gap:12px;">
+                @foreach (var a in Actions(p))
+                {
+                    <div class="row vcenter" style="gap:13px; padding:12px; border-radius:12px; background:var(--surface); border:1px solid var(--stroke);">
+                        <div class="ds-ico" style="color:@PriorityColor(a.priority);"><Icon Name="@a.icon" /></div>
+                        <div style="flex:1;">
+                            <div class="row spread vcenter">
+                                <div style="font-weight:700; font-size:13.5px;">@a.title</div>
+                                <span class="risk-badge" style="color:@PriorityColor(a.priority); background:@(PriorityColor(a.priority))22;">@a.priority</span>
+                            </div>
+                            <div class="muted" style="font-size:12.5px; margin-top:3px;">@a.detail</div>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+
+    private ParticipantDetail? _d;
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _d = null; _notFound = false;
+        _d = await Api.GetParticipantAsync(Id);
+        if (_d is null) _notFound = true;
+    }
+
+    private static List<(string title, string detail, string priority, string icon)> Actions(Participant p)
+    {
+        var list = new List<(string, string, string, string)>();
+        if (p.AlertClass == AlertClass.Emergency)
+        {
+            list.Add(("Immediate welfare check", "Lay eyes on the participant now and confirm safety.", "Urgent", "alert"));
+            list.Add(("Notify on-call clinician", "Emergency alert — every escalation level is notified at once.", "Urgent", "phone"));
+        }
+        var topMed = p.RiskScores.Where(r => r.Type != RiskType.DangerousBehaviour).OrderByDescending(r => r.Probability).First();
+        if (topMed.Band is RiskBand.High or RiskBand.Moderate)
+            list.Add(("Medication follow-up", "Pharmacy / nurse review of refusals, non-compliance and restart flags.", "High", "pill"));
+        if (p.RiskScores.First(r => r.Type == RiskType.DangerousBehaviour).Band is RiskBand.High or RiskBand.Moderate)
+            list.Add(("De-escalation & safety plan", "Apply the behaviour support plan and document techniques used.", "High", "shield"));
+        if (p.DataReliability == DataReliability.NotEnoughInformation)
+            list.Add(("Complete overdue assessment", p.AssessmentStatusDetail, "Routine", "clipboard"));
+        if (list.Count == 0)
+            list.Add(("Document routine check", "Record a welfare check and keep the care plan current.", "Routine", "check"));
+        return list;
+    }
+
+    private static string PriorityColor(string p) => p switch
+    {
+        "Urgent" => "#ef4444",
+        "High" => "#f97316",
+        _ => "#22d3ee"
+    };
+}

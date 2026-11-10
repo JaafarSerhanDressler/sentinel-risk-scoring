@@ -1,0 +1,68 @@
+@* Animated risk-distribution donut (by band). *@
+<div class="row donut-block" style="align-items:center; gap:22px;">
+    <div class="gauge-wrap" style="width:@(Size)px; height:@(Size)px; animation:fadeIn .6s ease both;">
+        <svg width="@Size" height="@Size" style="transform:rotate(-90deg);">
+            <circle cx="@C" cy="@C" r="@R" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="@Stroke" />
+            @{
+                double cum = 0;
+            }
+            @foreach (var seg in Segments())
+            {
+                var startDeg = Total == 0 ? 0 : cum / Total * 360;
+                var arc = seg.Fraction * Circ;
+                cum += seg.Count;
+                <circle cx="@C" cy="@C" r="@R" fill="none" stroke="@seg.Color" stroke-width="@Stroke"
+                        stroke-dasharray="@($"{Math.Max(0, arc - 3).ToString("0.##")} {(Circ).ToString("0.##")}")"
+                        stroke-dashoffset="@((_mounted ? 0 : arc).ToString("0.##"))"
+                        transform="rotate(@startDeg.ToString("0.##") @C @C)"
+                        stroke-linecap="round"
+                        style="transition: stroke-dashoffset 1s var(--ease) @((seg.Index * 0.12).ToString("0.##"))s;" />
+            }
+        </svg>
+        <div class="gauge-center">
+            <div class="gauge-score" style="font-size:34px;"><CountUp Value="Total" /></div>
+            <div class="gauge-label">Participants</div>
+        </div>
+    </div>
+    <div style="flex:1; display:flex; flex-direction:column; gap:11px;">
+        @foreach (var seg in Segments())
+        {
+            <div class="row" style="align-items:center; gap:10px;">
+                <span style="width:10px;height:10px;border-radius:3px;background:@seg.Color;flex:none;"></span>
+                <span style="flex:1;font-size:13px;font-weight:600;">@seg.Label</span>
+                <span style="font-size:14px;font-weight:800;">@seg.Count</span>
+                <span class="faint" style="font-size:11.5px;width:38px;text-align:right;">@((Total == 0 ? 0 : seg.Count * 100.0 / Total).ToString("0"))%</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<RiskDistributionBucket> Data { get; set; } = new();
+    [Parameter] public int Size { get; set; } = 170;
+    [Parameter] public int Stroke { get; set; } = 20;
+
+    private bool _mounted;
+    private double C => Size / 2.0;
+    private double R => (Size - Stroke) / 2.0;
+    private double Circ => 2 * Math.PI * R;
+    private int Total => Data.Sum(d => d.Count);
+
+    private record Seg(int Index, string Label, string Color, int Count, double Fraction);
+
+    private IEnumerable<Seg> Segments()
+    {
+        int i = 0;
+        foreach (var b in Data)
+            yield return new Seg(i++, Ui.BandLabel(b.Band), Ui.BandColor(b.Band), b.Count,
+                Total == 0 ? 0 : (double)b.Count / Total);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Task.Delay(100);
+        _mounted = true;
+        await InvokeAsync(StateHasChanged);
+    }
+}

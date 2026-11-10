@@ -1,0 +1,47 @@
+# Coolify one-stack deploy: the app (built from the Dockerfile) + PostgreSQL.
+#
+# In Coolify:
+#   New Resource -> Docker Compose -> point at this repo.
+#   Set the app service domain and container port = 8080.
+#   Set the POSTGRES_PASSWORD environment variable (Coolify UI / .env).
+#
+# The app currently runs on its in-memory synthetic dataset; the Postgres
+# service is provisioned and ready for when the EF Core data layer is enabled
+# (it reads ConnectionStrings__Postgres).
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__Postgres: "Host=db;Port=5432;Database=riskapp;Username=riskadmin;Password=${POSTGRES_PASSWORD:-change-me}"
+    expose:
+      - "8080"
+    depends_on:
+      - db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/api/dashboard/kpis"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: riskadmin
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+      POSTGRES_DB: riskapp
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U riskadmin -d riskapp"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:

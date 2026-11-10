@@ -1,0 +1,56 @@
+@page "/programmes"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Programmes · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <div class="row spread vcenter" style="margin-bottom:18px;">
+        <div>
+            <h1 style="font-size:24px;">Programmes</h1>
+            <div class="muted" style="font-size:13px; margin-top:4px;">@(_programmes?.Count ?? 0) programmes · alerts &amp; risk at a glance</div>
+        </div>
+    </div>
+
+    @if (_programmes is null)
+    {
+        <div class="grid g-2">@for (int i = 0; i < 4; i++) { <div class="card"><div class="sk" style="height:150px;"></div></div> }</div>
+    }
+    else
+    {
+        <div class="grid g-2 stagger">
+            @foreach (var pg in _programmes.OrderByDescending(x => x.Emergencies).ThenByDescending(x => x.AverageScore))
+            {
+                var band = BandFor(pg.AverageScore);
+                <div class="card" style="cursor:pointer;" @onclick='() => Nav.NavigateTo($"programmes/{pg.Code}")'>
+                    <div class="card-head" style="margin-bottom:12px;">
+                        <div class="ds-ico"><Icon Name="layers" /></div>
+                        @if (pg.Emergencies > 0) { <span class="risk-badge risk-critical"><span class="d"></span>@pg.Emergencies emergency</span> }
+                    </div>
+                    <h3 style="font-size:16px;">@pg.Code</h3>
+                    <div class="muted" style="font-size:12.5px; margin-top:3px;">@pg.Name · @Ui.ServiceLineLabel(pg.ServiceLine)</div>
+
+                    <div class="row spread" style="margin:16px 0 6px;">
+                        <div class="center-col"><div style="font-size:20px;font-weight:800;">@pg.ParticipantCount</div><div class="faint" style="font-size:10.5px;">Participants</div></div>
+                        <div class="center-col"><div style="font-size:20px;font-weight:800;color:var(--brand-2);">@pg.OpenAlerts</div><div class="faint" style="font-size:10.5px;">Open alerts</div></div>
+                        <div class="center-col"><div style="font-size:20px;font-weight:800;color:@Ui.BandColor(band);">@pg.AverageScore.ToString("0")</div><div class="faint" style="font-size:10.5px;">Avg score</div></div>
+                        <div class="center-col"><div style="font-size:20px;font-weight:800;color:var(--high);">@pg.HighBandCount</div><div class="faint" style="font-size:10.5px;">High band</div></div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<Programme>? _programmes;
+
+    protected override async Task OnInitializedAsync() => _programmes = await Api.GetProgrammesAsync();
+
+    private static RiskBand BandFor(double v) => v switch
+    {
+        >= 70 => RiskBand.High,
+        >= 40 => RiskBand.Moderate,
+        _ => RiskBand.Low
+    };
+}

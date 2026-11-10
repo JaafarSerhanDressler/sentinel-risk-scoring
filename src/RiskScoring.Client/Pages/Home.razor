@@ -1,0 +1,148 @@
+@page "/"
+@inject ApiClient Api
+@inject AppState App
+@inject NavigationManager Nav
+@implements IDisposable
+
+<PageTitle>Dashboard · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <div class="row spread vcenter" style="margin-bottom:22px;">
+        <div>
+            <div class="section-title">@Greeting</div>
+            <h1 style="font-size:26px;">@(App.User?.Name ?? "Care Team")</h1>
+            <div class="muted" style="font-size:13px; margin-top:4px;">
+                @DateTime.Now.ToString("dddd, MMMM d · HH:mm")
+                @if (_metrics is not null) { <span> · risk as of @_metrics.CredibleAsOf.ToString("MMM d HH:mm") UTC</span> }
+            </div>
+        </div>
+        <button class="btn btn-primary" @onclick='() => Nav.NavigateTo("assess")'><Icon Name="activity" /> Run Assessment</button>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid g-4 stagger" style="margin-bottom:18px;">
+        @if (_kpi is null)
+        {
+            @for (int i = 0; i < 4; i++) { <div class="card"><div class="sk" style="height:84px;"></div></div> }
+        }
+        else
+        {
+            <KpiCard Label="Open alerts" Value="_kpi.OpenAlerts" IconName="bell" Tint="#6366f1" Trend="_kpi.OpenAlertsTrend" />
+            <KpiCard Label="Emergencies" Value="_kpi.Emergencies" IconName="alert" Tint="#ef4444" ValueColor="#ef4444" Trend="_kpi.EmergenciesTrend" />
+            <KpiCard Label="High band" Value="_kpi.HighBandCount" IconName="flame" Tint="#f97316" ValueColor="#f97316" />
+            <KpiCard Label="Participants" Value="_kpi.TotalParticipants" IconName="users" Tint="#22d3ee" />
+        }
+    </div>
+
+    <!-- Charts row -->
+    <div class="grid g-2" style="margin-bottom:18px;">
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Risk distribution</div><div class="card-sub">Participants by band</div></div>
+                <span class="pill-stat"><Icon Name="layers" /> @(_kpi?.TotalProgrammes ?? 0) programmes</span>
+            </div>
+            @if (_dist is null) { <div class="sk" style="height:180px;"></div> }
+            else { <DonutChart Data="_dist" /> }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Daily scoring volume</div><div class="card-sub">Participants scored per day</div></div>
+                <span class="trend down"><Icon Name="trend-up" /> live</span>
+            </div>
+            @if (_throughput is null) { <div class="sk" style="height:180px;"></div> }
+            else { <BarChart Data="_throughput" /> }
+        </div>
+    </div>
+
+    <!-- Priority + activity -->
+    <div class="grid g-2">
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Priority alerts</div><div class="card-sub">Highest risk, open alerts</div></div>
+                <a class="back-btn" href="participants">View all <Icon Name="chevron-right" /></a>
+            </div>
+            @if (_participants is null)
+            {
+                <div class="col">@for (int i = 0; i < 5; i++) { <div class="sk" style="height:58px;"></div> }</div>
+            }
+            else
+            {
+                <div class="plist">
+                    @foreach (var p in _participants.Where(x => x.AlertState != AlertState.Closed).OrderByDescending(x => x.OverallScore).Take(5))
+                    {
+                        <div class="prow" @onclick='() => Nav.NavigateTo($"participants/{p.Id}")'>
+                            <div class="avatar sm">@p.Initials</div>
+                            <div class="meta">
+                                <div class="nm">@p.FullName @if (p.AlertClass == AlertClass.Emergency) { <span style="color:var(--critical);"> ●</span> }</div>
+                                <div class="sub">@p.ProgrammeCode · @Ui.RiskTypeLabel(p.TopRisk!.Type)</div>
+                            </div>
+                            <RiskBadge Band="p.OverallBand" />
+                            <div class="score-chip">
+                                <div class="score-num" style="color:@Ui.BandColor(p.OverallBand);">@p.OverallScore.ToString("0")</div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-head">
+                <div><div class="card-title">Live activity</div><div class="card-sub">Fabric & rules-engine events</div></div>
+                <a class="back-btn" href="logs">Audit log <Icon Name="chevron-right" /></a>
+            </div>
+            @if (_logs is null)
+            {
+                <div class="col">@for (int i = 0; i < 6; i++) { <div class="sk" style="height:34px;"></div> }</div>
+            }
+            else
+            {
+                @foreach (var l in _logs.Take(7))
+                {
+                    <div class="log-row">
+                        <span class="log-dot lv-@Ui.LogClass(l.Level)"></span>
+                        <div class="log-main">
+                            <div class="log-msg">@l.Message</div>
+                            <div class="log-meta">@Ui.TimeAgo(l.Timestamp) · <span class="tag">@l.Category</span></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private KpiSummary? _kpi;
+    private ModelMetrics? _metrics;
+    private List<RiskDistributionBucket>? _dist;
+    private List<ThroughputPoint>? _throughput;
+    private List<Participant>? _participants;
+    private List<LogEntry>? _logs;
+
+    private string Greeting => DateTime.Now.Hour switch
+    {
+        < 12 => "Good morning",
+        < 18 => "Good afternoon",
+        _ => "Good evening"
+    };
+
+    protected override void OnInitialized() => App.Changed += OnChanged;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var kpi = Api.GetKpisAsync();
+        var metrics = Api.GetMetricsAsync();
+        var dist = Api.GetRiskDistributionAsync();
+        var thr = Api.GetThroughputAsync();
+        var pts = Api.GetParticipantsAsync();
+        var logs = Api.GetLogsAsync(take: 10);
+        await Task.WhenAll(kpi, metrics, dist, thr, pts, logs);
+        _kpi = kpi.Result; _metrics = metrics.Result; _dist = dist.Result;
+        _throughput = thr.Result; _participants = pts.Result; _logs = logs.Result;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => App.Changed -= OnChanged;
+}

@@ -1,0 +1,27 @@
+<div style="margin-bottom:14px;">
+    <div class="row spread" style="margin-bottom:6px;">
+        <span style="font-size:13px; font-weight:600;">@Label</span>
+        <span style="font-size:13px; font-weight:800; color:@Color;">@Value.ToString("P1")</span>
+    </div>
+    <div class="factor-track">
+        <div style="height:100%; border-radius:6px; background:@Color;
+                    width:@((_mounted ? Math.Clamp(Value, 0, 1) * 100 : 0).ToString("0.#"))%;
+                    transition:width 1s var(--ease);"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "";
+    [Parameter] public double Value { get; set; }
+    [Parameter] public string Color { get; set; } = "#22d3ee";
+
+    private bool _mounted;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Task.Delay(120);
+        _mounted = true;
+        await InvokeAsync(StateHasChanged);
+    }
+}

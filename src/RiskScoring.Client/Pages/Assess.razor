@@ -1,0 +1,227 @@
+@page "/assess"
+@page "/assess/{ParticipantId}"
+@inject ApiClient Api
+@inject AppState App
+@inject NavigationManager Nav
+
+<PageTitle>Run Assessment · Sentinel</PageTitle>
+
+@if (_processing)
+{
+    <ProcessingOverlay Name="@(Selected?.FullName ?? "")" Steps="Steps" ActiveIndex="_activeStep" />
+}
+
+<div class="page-enter">
+    @if (_result is null)
+    {
+        <div style="margin-bottom:20px;">
+            <h1 style="font-size:24px;">Run risk assessment</h1>
+            <div class="muted" style="font-size:13px; margin-top:4px;">Select a participant and the data sources to feed the ML Fabric.</div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="card-head">
+                <div><div class="card-title"><span style="color:var(--brand-2);">1.</span> Select participant</div></div>
+                @if (Selected is not null) { <span class="risk-badge risk-low"><span class="d"></span>Selected</span> }
+            </div>
+
+            <div class="input" style="margin-bottom:14px;">
+                <Icon Name="search" />
+                <input placeholder="Search participants…" @bind="_q" @bind:event="oninput" />
+            </div>
+
+            @if (_participants is null)
+            {
+                <div class="col">@for (int i = 0; i < 4; i++) { <div class="sk" style="height:58px;"></div> }</div>
+            }
+            else
+            {
+                <div class="plist" style="max-height:330px; overflow:auto; padding-right:4px;">
+                    @foreach (var p in FilteredParticipants())
+                    {
+                        var sel = p.Id == _selectedId;
+                        <div class="prow" style="@(sel ? "border-color:rgba(99,102,241,0.6); background:rgba(99,102,241,0.1);" : "")"
+                             @onclick="() => _selectedId = p.Id">
+                            <div class="avatar sm">@p.Initials</div>
+                            <div class="meta">
+                                <div class="nm">@p.FullName</div>
+                                <div class="sub">@p.ProgrammeCode · #@p.ClientId</div>
+                            </div>
+                            <RiskBadge Band="p.OverallBand" />
+                            @if (sel) { <span style="color:var(--brand-2);"><Icon Name="check" /></span> }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="card-head">
+                <div><div class="card-title"><span style="color:var(--brand-2);">2.</span> Data sources</div><div class="card-sub">Feature inputs to the model</div></div>
+                <span class="pill-stat"><Icon Name="layers" /> @_selectedSources.Count selected</span>
+            </div>
+
+            @if (_sources is null)
+            {
+                <div class="sk" style="height:60px;"></div>
+            }
+            else
+            {
+                <div class="row wrap" style="gap:9px;">
+                    @foreach (var ds in _sources)
+                    {
+                        var on = _selectedSources.Contains(ds.Key);
+                        <button class="chip @(on ? "on" : "")" @onclick="() => ToggleSource(ds.Key)">
+                            <span class="status-dot @Ui.StatusClass(ds.Status)"></span>
+                            @ds.Name
+                            @if (on) { <Icon Name="check-sm" /> }
+                        </button>
+                    }
+                </div>
+                <div class="faint" style="font-size:11.5px; margin-top:12px;">Richer source coverage increases model confidence. Offline sources are excluded automatically.</div>
+            }
+        </div>
+
+        <button class="btn btn-primary btn-block btn-lg" disabled="@(_selectedId is null || _selectedSources.Count == 0)" @onclick="RunAsync">
+            <Icon Name="activity" /> Run risk assessment
+        </button>
+    }
+    else
+    {
+        var p = _result.Participant;
+        <div class="row spread vcenter" style="margin-bottom:18px;">
+            <div>
+                <div class="section-title">Assessment complete</div>
+                <h1 style="font-size:24px;">@p.FullName</h1>
+            </div>
+            <span class="risk-badge risk-low"><span class="d"></span>@_result.Run.DurationMs ms</span>
+        </div>
+
+        <div class="grid g-2" style="margin-bottom:18px;">
+            <div class="card center-col" style="justify-content:center; gap:14px;">
+                <RiskGauge Value="p.OverallScore" Band="p.OverallBand" Size="210" />
+                <div class="row" style="gap:8px;"><RiskBadge Band="p.OverallBand" /><AlertBadge Class="p.AlertClass" /></div>
+                <span class="pill-stat"><Icon Name="cpu" /> @p.PredictionId</span>
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div class="card-title">Risk types</div><Icon Name="cpu" /></div>
+                @foreach (var rt in p.RiskScores)
+                {
+                    <RiskTypeBar Score="rt" />
+                }
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="card-head"><div class="card-title">Signals in the 90-day window</div><Icon Name="alert" /></div>
+            <div class="row spread wrap" style="gap:12px;">
+                <span class="pill-stat"><Icon Name="alert" /> @_result.RiskEvents.Count behaviour event(s)</span>
+                <span class="pill-stat"><Icon Name="pill" /> @_result.MedicationEvents.Count medication event(s)</span>
+                <span class="pill-stat"><Icon Name="flame" /> @_result.RiskEvents.Count(e => e.EventClass == AlertClass.Emergency) emergency signal(s)</span>
+            </div>
+        </div>
+
+        <div class="row collapse">
+            <button class="btn btn-primary" @onclick='() => Nav.NavigateTo($"participants/{p.Id}")'><Icon Name="user" /> View full profile</button>
+            <button class="btn btn-ghost" @onclick="Reset"><Icon Name="refresh" /> Run another</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? ParticipantId { get; set; }
+
+    private List<Participant>? _participants;
+    private List<DataSource>? _sources;
+    private readonly HashSet<string> _selectedSources = new();
+    private string? _selectedId;
+    private string _q = "";
+
+    private bool _processing;
+    private int _activeStep;
+    private ScoreResponse? _result;
+
+    private static readonly string[] Steps =
+    {
+        "Assembling features from Credible & ChartMeds",
+        "Querying ML Fabric model",
+        "Scoring the three risk types",
+        "Attributing behaviour & medication events",
+        "Resolving alert class & owner"
+    };
+
+    private Participant? Selected => _participants?.FirstOrDefault(p => p.Id == _selectedId);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var pts = Api.GetParticipantsAsync();
+        var src = Api.GetDataSourcesAsync();
+        await Task.WhenAll(pts, src);
+        _participants = pts.Result;
+        _sources = src.Result;
+        if (_sources is not null)
+            foreach (var ds in _sources.Where(d => d.Status != DataSourceStatus.Offline))
+                _selectedSources.Add(ds.Key);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrWhiteSpace(ParticipantId)) _selectedId = ParticipantId;
+    }
+
+    private IEnumerable<Participant> FilteredParticipants()
+    {
+        if (_participants is null) return Enumerable.Empty<Participant>();
+        IEnumerable<Participant> q = _participants;
+        if (!string.IsNullOrWhiteSpace(_q))
+        {
+            var t = _q.Trim().ToLowerInvariant();
+            q = q.Where(p => p.FullName.ToLowerInvariant().Contains(t) || p.ClientId.ToString().Contains(t));
+        }
+        return q.OrderByDescending(p => p.OverallScore);
+    }
+
+    private void ToggleSource(string key)
+    {
+        if (!_selectedSources.Add(key)) _selectedSources.Remove(key);
+    }
+
+    private async Task RunAsync()
+    {
+        if (_selectedId is null) return;
+        _result = null;
+        _processing = true;
+        _activeStep = 0;
+        await InvokeAsync(StateHasChanged);
+
+        var req = new ScoreRequest
+        {
+            ParticipantId = _selectedId,
+            DataSourceKeys = _selectedSources.ToList(),
+            RequestedBy = App.User?.Name ?? "Care Manager"
+        };
+        var apiTask = Api.RunAssessmentAsync(req);
+
+        for (int i = 0; i < Steps.Length; i++)
+        {
+            _activeStep = i;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(600);
+        }
+        _activeStep = Steps.Length;
+        await InvokeAsync(StateHasChanged);
+
+        var resp = await apiTask;
+        await Task.Delay(350);
+        _processing = false;
+        _result = resp;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Reset()
+    {
+        _result = null;
+        _q = "";
+    }
+}

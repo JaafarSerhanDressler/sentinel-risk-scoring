@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/RiskScoring.Api/RiskScoring.Api.csproj" />
+    <Project Path="src/RiskScoring.Client/RiskScoring.Client.csproj" />
+    <Project Path="src/RiskScoring.Shared/RiskScoring.Shared.csproj" />
+  </Folder>
+</Solution>

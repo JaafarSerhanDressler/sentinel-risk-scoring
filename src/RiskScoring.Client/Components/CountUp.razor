@@ -1,0 +1,31 @@
+@* Animated count-up number. Mount after data loads so Value is final. *@
+<span>@Display</span>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public int Decimals { get; set; }
+    [Parameter] public int DurationMs { get; set; } = 1100;
+    [Parameter] public string Suffix { get; set; } = "";
+    [Parameter] public string Prefix { get; set; } = "";
+
+    private double _current;
+    private string Display => Prefix + _current.ToString("N" + Decimals) + Suffix;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        var duration = Math.Max(1, DurationMs);
+        var start = DateTime.Now;
+        while (true)
+        {
+            var t = (DateTime.Now - start).TotalMilliseconds / duration;
+            if (t >= 1) break;
+            var eased = 1 - Math.Pow(1 - t, 3);
+            _current = Value * eased;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(16);
+        }
+        _current = Value;
+        await InvokeAsync(StateHasChanged);
+    }
+}

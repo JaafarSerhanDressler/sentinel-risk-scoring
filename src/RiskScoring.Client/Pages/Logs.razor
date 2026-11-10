@@ -1,0 +1,65 @@
+@page "/logs"
+@inject ApiClient Api
+
+<PageTitle>Audit Logs · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <div class="row spread vcenter" style="margin-bottom:18px;">
+        <div>
+            <h1 style="font-size:24px;">Audit & event log</h1>
+            <div class="muted" style="font-size:13px; margin-top:4px;">Immutable trail of ML Fabric, ingestion and access events</div>
+        </div>
+        <button class="btn btn-ghost" @onclick="Refresh"><Icon Name="refresh" /> Refresh</button>
+    </div>
+
+    <div class="row wrap" style="gap:9px; margin-bottom:18px;">
+        <button class="chip @(_filter is null ? "on" : "")" @onclick="() => _filter = null">All</button>
+        @foreach (var lvl in Enum.GetValues<LogSeverity>())
+        {
+            <button class="chip @(_filter == lvl ? "on" : "")" @onclick="() => _filter = lvl">
+                <span class="log-dot lv-@Ui.LogClass(lvl)" style="margin:0;"></span> @lvl
+            </button>
+        }
+    </div>
+
+    <div class="card">
+        @if (_logs is null)
+        {
+            <div class="col">@for (int i = 0; i < 10; i++) { <div class="sk" style="height:38px;"></div> }</div>
+        }
+        else
+        {
+            var list = _logs.Where(l => _filter is null || l.Level == _filter).ToList();
+            <div class="muted" style="font-size:12.5px; margin-bottom:10px;">@list.Count event@(list.Count == 1 ? "" : "s")</div>
+            @foreach (var l in list)
+            {
+                <div class="log-row">
+                    <span class="log-dot lv-@Ui.LogClass(l.Level)"></span>
+                    <div class="log-main">
+                        <div class="row spread vcenter wrap" style="gap:8px;">
+                            <div class="log-msg">@l.Message</div>
+                            <span class="tag">@l.Category</span>
+                        </div>
+                        <div class="log-meta">
+                            @l.Timestamp.ToString("MMM d · HH:mm:ss") · @l.Actor · @l.Action
+                            @if (!string.IsNullOrEmpty(l.Correlation)) { <span> · cid:@l.Correlation</span> }
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    private List<LogEntry>? _logs;
+    private LogSeverity? _filter;
+
+    protected override async Task OnInitializedAsync() => await Refresh();
+
+    private async Task Refresh()
+    {
+        _logs = null;
+        _logs = await Api.GetLogsAsync(take: 100);
+    }
+}

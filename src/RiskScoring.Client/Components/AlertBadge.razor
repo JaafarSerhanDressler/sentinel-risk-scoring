@@ -1,0 +1,7 @@
+<span class="risk-badge" style="color:@Ui.AlertClassColor(Class); background:@(Ui.AlertClassColor(Class))22;">
+    <span class="d" style="background:@Ui.AlertClassColor(Class);"></span>@Ui.AlertClassLabel(Class)
+</span>
+
+@code {
+    [Parameter] public AlertClass Class { get; set; }
+}

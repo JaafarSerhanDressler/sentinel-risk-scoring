@@ -1,0 +1,88 @@
+@page "/programmes/{Code}"
+@inject ApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Programme · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <a class="back-btn" href="programmes" style="margin-bottom:16px; display:inline-flex;"><Icon Name="chevron-left" /> Back to programmes</a>
+
+    @if (_notFound)
+    {
+        <div class="card"><div class="muted">Programme not found.</div></div>
+    }
+    else if (_d is null)
+    {
+        <div class="sk" style="height:120px; margin-bottom:18px;"></div>
+        <div class="grid g-2"><div class="sk" style="height:220px;"></div><div class="sk" style="height:220px;"></div></div>
+    }
+    else
+    {
+        var pg = _d.Programme;
+
+        <div class="card" style="margin-bottom:18px;">
+            <div class="row vcenter" style="gap:16px;">
+                <div class="avatar lg"><Icon Name="layers" /></div>
+                <div>
+                    <h1 style="font-size:23px;">@pg.Code</h1>
+                    <div class="muted" style="font-size:13px; margin-top:4px;">@pg.Name · @Ui.ServiceLineLabel(pg.ServiceLine)</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid g-4 stagger" style="margin-bottom:18px;">
+            <KpiCard Label="Participants" Value="pg.ParticipantCount" IconName="users" Tint="#6366f1" />
+            <KpiCard Label="Open alerts" Value="pg.OpenAlerts" IconName="bell" Tint="#22d3ee" />
+            <KpiCard Label="Emergencies" Value="pg.Emergencies" IconName="alert" Tint="#ef4444" ValueColor="#ef4444" />
+            <KpiCard Label="Avg score" Value="pg.AverageScore" IconName="target" Tint="#f59e0b" />
+        </div>
+
+        <div class="grid g-2">
+            <div class="card">
+                <div class="card-head"><div class="card-title">Risk distribution</div><Icon Name="target" /></div>
+                <DonutChart Data="Distribution()" Size="150" />
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div class="card-title">Participants</div><span class="pill-stat"><Icon Name="users" /> @_d.Participants.Count</span></div>
+                <div class="plist" style="max-height:360px; overflow:auto; padding-right:4px;">
+                    @foreach (var p in _d.Participants)
+                    {
+                        <div class="prow" @onclick='() => Nav.NavigateTo($"participants/{p.Id}")'>
+                            <div class="avatar sm">@p.Initials</div>
+                            <div class="meta">
+                                <div class="nm">@p.FullName</div>
+                                <div class="sub">@Ui.RiskTypeLabel(p.TopRisk!.Type) · @(p.CaseManager ?? "Unassigned")</div>
+                            </div>
+                            @if (p.AlertClass == AlertClass.Emergency) { <AlertBadge Class="p.AlertClass" /> }
+                            <RiskBadge Band="p.OverallBand" />
+                            <span class="score-num" style="font-size:18px;color:@Ui.BandColor(p.OverallBand);">@p.OverallScore.ToString("0")</span>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Code { get; set; } = "";
+
+    private ProgrammeDetail? _d;
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _d = null; _notFound = false;
+        _d = await Api.GetProgrammeAsync(Code);
+        if (_d is null) _notFound = true;
+    }
+
+    private List<RiskDistributionBucket> Distribution()
+    {
+        var people = _d?.Participants ?? new();
+        return Enum.GetValues<RiskBand>()
+            .Select(b => new RiskDistributionBucket { Band = b, Count = people.Count(p => p.OverallBand == b) })
+            .ToList();
+    }
+}

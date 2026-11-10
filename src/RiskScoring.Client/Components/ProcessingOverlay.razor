@@ -1,0 +1,44 @@
+@* Full-screen ML Fabric inference animation, driven by the parent page. *@
+<div class="overlay">
+    <div class="proc">
+        <div class="proc-ring">
+            <svg viewBox="0 0 100 100">
+                <circle cx="50" cy="50" r="42" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="5" />
+                <circle class="spin" cx="50" cy="50" r="42" fill="none" stroke="url(#pg)" stroke-width="5"
+                        stroke-linecap="round" stroke-dasharray="70 400" />
+                <defs>
+                    <linearGradient id="pg" x1="0" y1="0" x2="1" y2="1">
+                        <stop offset="0" stop-color="#6366f1" />
+                        <stop offset="1" stop-color="#22d3ee" />
+                    </linearGradient>
+                </defs>
+            </svg>
+            <div class="proc-core"><Icon Name="cpu" /></div>
+        </div>
+
+        <h3>Analyzing with ML Fabric</h3>
+        <p class="ps">@(Steps.Length > 0 && ActiveIndex < Steps.Length ? Steps[ActiveIndex] : "Finalizing risk score…") · @Name</p>
+
+        <div class="steps">
+            @for (int i = 0; i < Steps.Length; i++)
+            {
+                var state = i < ActiveIndex ? "done" : i == ActiveIndex ? "active" : "";
+                <div class="step @state">
+                    <span class="step-ic">
+                        @if (i < ActiveIndex)
+                        {
+                            <Icon Name="check-sm" />
+                        }
+                    </span>
+                    <span>@Steps[i]</span>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Name { get; set; } = "";
+    [Parameter] public string[] Steps { get; set; } = Array.Empty<string>();
+    [Parameter] public int ActiveIndex { get; set; }
+}

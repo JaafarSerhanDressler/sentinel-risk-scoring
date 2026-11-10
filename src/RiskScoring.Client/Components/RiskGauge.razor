@@ -1,0 +1,41 @@
+@* Animated circular risk gauge (band-coloured). *@
+<div class="gauge-wrap" style="width:@(Size)px; height:@(Size)px;">
+    <svg width="@Size" height="@Size" class="gauge-ring">
+        <circle class="gauge-track" cx="@Center" cy="@Center" r="@R" stroke-width="@Stroke" />
+        <circle class="gauge-prog" cx="@Center" cy="@Center" r="@R" stroke-width="@Stroke"
+                stroke="@Color"
+                stroke-dasharray="@Circumference.ToString("0.##")"
+                stroke-dashoffset="@_offset.ToString("0.##")"
+                style="filter: drop-shadow(0 0 7px @(Color)88);" />
+    </svg>
+    <div class="gauge-center">
+        <div class="gauge-score" style="color:@Color;">
+            <CountUp Value="Value" DurationMs="1300" />
+        </div>
+        <div class="gauge-label">@Label</div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public double Value { get; set; }
+    [Parameter] public RiskBand Band { get; set; }
+    [Parameter] public int Size { get; set; } = 200;
+    [Parameter] public int Stroke { get; set; } = 14;
+    [Parameter] public string Label { get; set; } = "Risk score";
+
+    private double _offset;
+    private double Center => Size / 2.0;
+    private double R => (Size - Stroke) / 2.0;
+    private double Circumference => 2 * Math.PI * R;
+    private string Color => Ui.BandColor(Band);
+
+    protected override void OnInitialized() => _offset = Circumference;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Task.Delay(80);
+        _offset = Circumference * (1 - Math.Clamp(Value, 0, 100) / 100.0);
+        await InvokeAsync(StateHasChanged);
+    }
+}

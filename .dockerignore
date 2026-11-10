@@ -1,0 +1,10 @@
+**/bin/
+**/obj/
+**/publish/
+publish/
+.git/
+.vs/
+.vscode/
+*.user
+infra/
+guide.html

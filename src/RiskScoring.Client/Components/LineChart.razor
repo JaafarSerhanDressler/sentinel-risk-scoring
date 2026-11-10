@@ -1,0 +1,75 @@
+@* Animated trend line chart (SVG, stretches to container width). *@
+<div style="width:100%;">
+    <svg viewBox="0 0 @W @H" preserveAspectRatio="none" style="width:100%; height:@(H)px; display:block;">
+        <defs>
+            <linearGradient id="@_areaId" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="@Color" stop-opacity="0.28" />
+                <stop offset="1" stop-color="@Color" stop-opacity="0" />
+            </linearGradient>
+        </defs>
+        <!-- gridlines -->
+        @foreach (var gy in new[] { 0.25, 0.5, 0.75 })
+        {
+            var y = (H * gy).ToString("0.##");
+            <line x1="0" y1="@y" x2="@W" y2="@y" stroke="rgba(255,255,255,0.05)" stroke-width="1" vector-effect="non-scaling-stroke" />
+        }
+        @if (Points.Count > 1)
+        {
+            <path d="@AreaPath" fill="url(#@_areaId)" style="opacity:@(_mounted ? 1 : 0); transition:opacity .8s ease .3s;" />
+            <path d="@LinePath" fill="none" stroke="@Color" stroke-width="2.5" vector-effect="non-scaling-stroke"
+                  stroke-linecap="round" stroke-linejoin="round"
+                  stroke-dasharray="@_len.ToString("0.##")"
+                  stroke-dashoffset="@((_mounted ? 0 : _len).ToString("0.##"))"
+                  style="transition: stroke-dashoffset 1.5s var(--ease);" />
+            <circle cx="@_last.x.ToString("0.##")" cy="@_last.y.ToString("0.##")" r="4.5" fill="@Color"
+                    style="opacity:@(_mounted ? 1 : 0); transition:opacity .4s ease 1.3s;">
+                <animate attributeName="r" values="4.5;7;4.5" dur="2s" repeatCount="indefinite" />
+            </circle>
+        }
+    </svg>
+</div>
+
+@code {
+    [Parameter] public List<RiskTrendPoint> Data { get; set; } = new();
+    [Parameter] public string Color { get; set; } = "#22d3ee";
+    [Parameter] public int H { get; set; } = 150;
+
+    private const double W = 600;
+    private const double Pad = 14;
+    private readonly string _areaId = "area" + Guid.NewGuid().ToString("N")[..6];
+    private bool _mounted;
+    private double _len;
+    private (double x, double y) _last;
+
+    private List<(double x, double y)> Points = new();
+
+    protected override void OnParametersSet()
+    {
+        Points = new();
+        if (Data.Count == 0) return;
+        for (int i = 0; i < Data.Count; i++)
+        {
+            var x = Data.Count == 1 ? W / 2 : i / (double)(Data.Count - 1) * W;
+            var y = H - (Math.Clamp(Data[i].Score, 0, 100) / 100.0) * (H - Pad * 2) - Pad;
+            Points.Add((x, y));
+        }
+        _last = Points[^1];
+        _len = 0;
+        for (int i = 1; i < Points.Count; i++)
+            _len += Math.Sqrt(Math.Pow(Points[i].x - Points[i - 1].x, 2) + Math.Pow(Points[i].y - Points[i - 1].y, 2));
+    }
+
+    private string LinePath =>
+        string.Join(" ", Points.Select((p, i) => $"{(i == 0 ? "M" : "L")} {p.x:0.##} {p.y:0.##}"));
+
+    private string AreaPath =>
+        LinePath + $" L {Points[^1].x:0.##} {H} L {Points[0].x:0.##} {H} Z";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Task.Delay(90);
+        _mounted = true;
+        await InvokeAsync(StateHasChanged);
+    }
+}

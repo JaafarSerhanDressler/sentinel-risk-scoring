@@ -1,0 +1,95 @@
+@page "/settings"
+@inject AppState App
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@implements IDisposable
+
+<PageTitle>Settings · Sentinel</PageTitle>
+
+<div class="page-enter">
+    <h1 style="font-size:24px; margin-bottom:18px;">Settings</h1>
+
+    <div class="grid g-2">
+        <div class="col">
+            <div class="card">
+                <div class="card-head"><div class="card-title">Profile</div><Icon Name="user" /></div>
+                <div class="row vcenter" style="gap:14px;">
+                    <div class="avatar lg">@(App.User?.Initials ?? "–")</div>
+                    <div>
+                        <div style="font-weight:800; font-size:16px;">@(App.User?.Name ?? "Guest")</div>
+                        <div class="muted" style="font-size:13px;">@(App.User?.Role) · role &amp; scope from Entra</div>
+                        <div class="faint" style="font-size:12.5px; margin-top:2px;">@(App.User?.Email)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div class="card-title">Preferences</div><Icon Name="settings" /></div>
+                <div class="row spread vcenter" style="padding:10px 0; border-bottom:1px solid var(--stroke);">
+                    <div><div style="font-weight:600; font-size:13.5px;">Emergency push alerts</div><div class="muted" style="font-size:12px;">Notify on every emergency, all levels at once</div></div>
+                    <Toggle @bind-Value="_emergency" />
+                </div>
+                <div class="row spread vcenter" style="padding:10px 0; border-bottom:1px solid var(--stroke);">
+                    <div><div style="font-weight:600; font-size:13.5px;">Warning escalations</div><div class="muted" style="font-size:12px;">Follow the programme chain with ack / action clocks</div></div>
+                    <Toggle @bind-Value="_warnings" />
+                </div>
+                <div class="row spread vcenter" style="padding:10px 0;">
+                    <div><div style="font-weight:600; font-size:13.5px;">Auto-lock (10 min idle)</div><div class="muted" style="font-size:12px;">For shared-device sign-in</div></div>
+                    <Toggle @bind-Value="_autolock" />
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card">
+                <div class="card-head"><div class="card-title">Install app</div><Icon Name="download" /></div>
+                @if (App.CanInstall)
+                {
+                    <p class="muted" style="font-size:13px; margin-bottom:14px;">Install Sentinel as a standalone app for faster, offline-ready access on a shared phone.</p>
+                    <button class="btn btn-primary btn-block" @onclick="InstallAsync"><Icon Name="download" /> Install Sentinel</button>
+                }
+                else
+                {
+                    <p class="muted" style="font-size:13px;">
+                        To install: open the browser menu and choose <b>“Add to Home Screen”</b> (mobile) or the
+                        <b>install</b> icon in the address bar (desktop). Sentinel runs full-screen and works offline.
+                    </p>
+                }
+            </div>
+
+            <div class="card">
+                <div class="card-head"><div class="card-title">About</div><Icon Name="info" /></div>
+                <div class="row spread" style="font-size:12.5px; padding:7px 0;"><span class="muted">App version</span><span class="mono">1.0.0 (discovery)</span></div>
+                <div class="row spread" style="font-size:12.5px; padding:7px 0;"><span class="muted">ML Fabric model</span><span class="mono">risk-fabric-2026.11.02</span></div>
+                <div class="row spread" style="font-size:12.5px; padding:7px 0;"><span class="muted">Programmes</span><span class="mono">BH RES · ICMS · SH · SH SUBONLY</span></div>
+                <div class="row spread" style="font-size:12.5px; padding:7px 0;"><span class="muted">Environment</span><span class="mono">Non-prod · synthetic data</span></div>
+                <div class="divider" style="margin:12px 0;"></div>
+                <div class="faint" style="font-size:11.5px;">All participants, scores and events are synthetic and generated for demonstration. No real participant data is present in any non-production environment.</div>
+            </div>
+
+            <button class="btn btn-ghost btn-block" @onclick="SignOutAsync"><Icon Name="logout" /> Sign out</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _emergency = true;
+    private bool _warnings = true;
+    private bool _autolock = true;
+
+    protected override void OnInitialized() => App.Changed += OnChanged;
+
+    private async Task InstallAsync()
+    {
+        try { await JS.InvokeAsync<string>("sentinel.promptInstall"); } catch { }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await App.SignOutAsync();
+        Nav.NavigateTo("login", replace: true);
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+    public void Dispose() => App.Changed -= OnChanged;
+}
